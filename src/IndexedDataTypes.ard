@@ -1,0 +1,114 @@
+\import Data.Bool
+\import Data.List
+\import Function.Meta
+\import Logic (Empty)
+
+\open Nat
+
+\func absurd {A : \Type} (e : Empty) : A
+\data Unit | unit
+
+\func T (b : Bool) : \Type
+  | true => Unit
+  | false => Empty
+
+\func list_length {A : \Type} (xs : List A) : Nat \elim xs
+  | nil => 0
+  | :: x xs => 1 + list_length xs
+
+\func \infix 6 < (n m : Nat) : Bool
+  | _, 0 => false
+  | 0, suc m => true
+  | suc n, suc m => n < m
+
+\func min_zero (n : Nat)  (proof : T (n < 0)) : Empty \elim n
+  | 0 => absurd proof
+  | suc n => absurd proof
+
+-- Exercise 1
+\func lookup {A : \Type} (xs : List A) (n : Nat) (n_in_range : T (n < list_length xs)) : A \elim xs, n
+  | nil, _ => absurd (min_zero _ n_in_range)
+  | :: x xs, 0 => x
+  | :: x xs, suc n => lookup xs n n_in_range
+
+\func vec (A : \Type) (n : Nat) : \Type \elim n
+  | 0 => \Sigma
+  | suc n => \Sigma A (vec A n)
+
+-- Exercise 2
+\func replicate {A : \Type} (a : A) (n : Nat) : vec A n \elim n
+  | 0 => ()
+  | suc n => (a, replicate a n)
+
+-- Exercise 3
+\func map {A B : \Type} (n : Nat) (vector : vec A n) (f : A -> B) : vec B n \elim n
+  | 0 => ()
+  | suc n => (f vector.1, map n vector.2 f)
+
+-- Exercise 4
+\func zipWith {A B C : \Type} (n : Nat) (xs : vec A n) (ys : vec B n) (f : A -> B -> C) : vec C n \elim n
+  | 0 => ()
+  | suc n => (f xs.1 ys.1, zipWith n xs.2 ys.2 f)
+
+\data Vec (A : \Type) (n : Nat) \elim n
+  | 0 => fnil
+  | suc n => fcons A (Vec A n)
+
+-- Exercise 2
+\func Replicate {A : \Type} (a : A) (n : Nat) : Vec A n \elim n
+  | 0 => fnil
+  | suc n => fcons a (Replicate a n)
+
+-- Exercise 3
+\func Map {A B : \Type} {n : Nat} (xs : Vec A n) (f : A -> B) : Vec B n \elim n, xs
+  | 0, fnil => fnil
+  | suc n, fcons x xs => fcons (f x) (Map xs f)
+
+-- Exercise 4
+\func ZipWith {A B C : \Type} {n : Nat} (xs : Vec A n) (ys : Vec B n) (f : A -> B -> C) : Vec C n \elim n, xs, ys
+  | 0, fnil, fnil => fnil
+  | suc n, fcons x xs, fcons y ys => fcons (f x y) (ZipWith xs ys f)
+
+\data Fin (n : Nat) \with
+  | suc n => { fzero | fsuc (Fin n) }
+
+-- Exercise 5
+-- Чести ради тут я долго думал, потому что не мог догадаться, как сделать "сдвиг" отображения F.
+\func FintoVec {A : \Type} {n : Nat} (F : Fin n -> A) : Vec A n \elim n
+  | 0 => fnil
+  | suc n => fcons (F fzero) $ FintoVec (\lam x => F $ fsuc x )
+
+-- Exercise 7
+\data CTree (A : \Type) (n : Nat) \elim n
+  | 0 => cleaf
+  | suc n => cnode (CTree A n) A (CTree A n)
+
+-- Матрица n x m это отображение Vec A n -> Vec A m
+-- Можно было определить матрицу, как Vec (Vec A m) n, но я не знаю, что проще доказывать и определять
+-- Exercise 6
+\func VecAdd {A : \Type} {n : Nat} (f : A -> A -> A) (a b : Vec A n) : Vec A n \elim n, a, b
+  | 0, fnil, fnil => fnil
+  | suc n, fcons a' ax, fcons b' bx => fcons (f a' b') (VecAdd f ax bx)
+
+\func MatricesAdd {A : \Type} (f : A -> A -> A) {n m : Nat} (F G : Vec A n -> Vec A m) : Vec A n -> Vec A m =>
+  \lam x => VecAdd f (F x) (G x)
+
+-- Сделать тут не 3 конструктора у меня не получилось, хотя я очень хотел.
+-- Exercise 8
+\data Tree (A : \Type) (n : Nat) \elim n
+  | suc n => { leaf | node (Tree A n) A (Tree A n)}
+  | 0 => empty_leaf
+
+\func tree0 {A : \Type} (x : A) : Tree A 1 => leaf
+\func tree1 {A : \Type} (x : A) : Tree A 1 => node empty_leaf x empty_leaf
+
+\func max (n m : Nat) : Nat
+  | 0, 0 => 0
+  | x, 0 => x
+  | 0, y => y
+  | suc x, suc y => max x y
+
+\func heightTree {A : \Type} {n : Nat} (tree : Tree A n) : Nat \elim n, tree
+  | suc n, leaf => 0
+  | 0, _ => 0
+  | suc n, node left_tree var right_tree => 1 + max (heightTree left_tree) (heightTree right_tree)

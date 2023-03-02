@@ -1,0 +1,98 @@
+\import Basics
+\import Data.Maybe
+\import Function.Meta
+
+-- Exercise 1
+\record Pair (A B : \Type)
+  | fst' : A
+  | snd' : B
+
+\func swap {A B : \Type} (p : Pair A B) : Pair B A \cowith
+  | fst' => p.snd'
+  | snd' => p.fst'
+
+\func swap' {A B : \Type} (p : Pair A B) : Pair B A \elim p
+  | (a, b) => \new Pair { | fst' => b | snd' => a }
+
+\func swap'' {A B : \Type} (p : Pair A B) : Pair B A => \new Pair {
+  | fst' => p.snd'
+  | snd' => p.fst'
+}
+
+-- Exercise 2
+\func invSwap {A B : \Type} (p : Pair A B) : swap (swap p) = p => idp
+
+
+\data Bool | true | false
+\data Empty
+
+\data T (b : Bool) \with
+  | true => tt
+
+\func isPos (n : Nat) : Bool
+  | 0 => false
+  | suc _ => true
+
+\record PosNat (n : Nat) (p : T (isPos n))
+
+-- Exercise 3
+-- Около нулевое понимание, почему T false не Empty
+-- \func PosNat0isEmpty (p : PosNat 0) : Empty => p.p
+
+\func PosNat1NotEmpty : PosNat 1 => \new PosNat {
+  | p => tt
+}
+
+-- Exercise 4
+\func isCoprime (n m : Nat) : Bool => \case (Basics.gcd n m) \with {
+  | 1 => true
+  | _ => false
+}
+
+\record coPrime (n m : Nat) (p : T (isCoprime n m))
+
+\record coPrime60 (n : Nat) (p : T (isCoprime n 60))
+
+\class Functor (F : \Type -> \Type)
+  | fmap {A B : \Type} (f : A -> B) : F A -> F B
+  | fmap-id {A : \Type} (y : F A) : fmap (\lam (x : A) => x) y = y
+  | fmap-comp {A B C : \Type} (f : A -> B) (g : B -> C) (y : F A)
+  : fmap (\lam x => g (f x)) y = fmap g (fmap f y)
+
+
+-- Для монад нужен bind и return и их свойства, как я помню.
+\class Monad \extends Functor {
+  | return {A : \Type} : A -> F A
+  | bind {A B : \Type} : F A -> (A -> F B) -> F B
+  | left-id {A B : \Type} (a : A) (f : A -> F B) : bind (return a) f = f a
+  | right-id {A : \Type} (a : F A) : bind a return = a
+  | assoc-bind {A B C : \Type} (a : F A) (f : A -> F B) (g : B -> F C)
+  : bind (bind a f) g = bind a (\lam x => bind (f x) g)
+  -- насколько я понимаю, если переопределить здесь fmap, то не нужно будет определять дальше.
+  | fmap f x => bind x (\lam y => return $ f y)
+  -- и свойства кажется сразу могу доказать, потому что любая монада является функтором.
+  | fmap-id x => right-id x
+  -- вот последнее оказалось сложноватым, наверное стоит сначала написать на листочке цепочку
+  -- TODO: листочек
+}
+
+\instance MaybeMonad : Monad Maybe => \new Monad {
+  | return => just
+  | bind x f => \case x \with {
+    | nothing => nothing
+    | just x => f x
+  }
+  | fmap-comp f g x => \case \elim x \with {
+    | nothing => idp
+    | just t => idp
+  }
+  | left-id x f => idp
+  | right-id x => \case \elim x \with {
+    | nothing => idp
+    | just t => idp
+  }
+  | assoc-bind x f g => \case \elim x \with {
+    | nothing => idp
+    | just t => idp
+  }
+}

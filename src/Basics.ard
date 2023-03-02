@@ -1,0 +1,55 @@
+\import Data.Bool
+
+{-
+В прошлый раз у меня не получилось написать gcd.
+Просто скажу Arend, что алгоритм точно закончится за n шагов.
+ -}
+\func \infix 6 >= (x y : Nat) : Bool
+  | 0, suc n => false
+  | _, 0 => true
+  | suc n, suc m => n >= m
+
+\func \infix 5 - (x y : Nat) : Nat
+  | x, 0 => x
+  | 0, _ => 0
+  | suc n, suc m => n - m
+
+\func gcd (x y : Nat) : Nat => gcd_helper x x y
+    \where \func gcd_helper (count x y : Nat) : Nat \elim count
+      | 0 => 0
+      | suc n => \case x \with {
+        | 0 => x
+        | suc t => \case y \with {
+          | 0 => 0
+          | suc k => \case (x >= y) \with {
+            | true => gcd_helper n (x - y) y
+            | false => gcd_helper n (y - x) x
+          }
+        }
+      }
+
+{-
+Огромный минус этого определения: в его рамках сложно что-то доказывать.
+По крайней мере мне тяжело показать, почему свойство ниже будет выполнено, так как есть первый аргумент.
+-}
+\func comm-gcd_helper {x y : Nat} : gcd.gcd_helper x x y = gcd.gcd_helper y y x \elim x, y
+  | 0, 0 => idp
+  | 0, suc n => idp
+  | suc n, 0 => idp
+  | suc n, suc m => {?}
+
+\func assoc-boolOr {x y z : Bool} : x or (y or z) = (x or y) or z \elim x
+  | true => idp
+  | false => idp
+
+\func assoc-boolAnd {x y z : Bool}: x and (y and z) = (x and y) and z \elim x
+  | true => idp
+  | false => idp
+
+\func two*two=four : 2 Nat.* 2 = 4 => idp
+{-
+Я понял, что idp по своей сути проверяет, у меня есть тип I, где оба конструктора равны.
+Поэтому если есть отображение I -> a, такое что left -> a, а right -> a', то a = a'.
+
+Данный point не очень сложный для понимания, но сложный для использования.
+-}

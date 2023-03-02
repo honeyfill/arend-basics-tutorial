@@ -1,0 +1,146 @@
+\import Arith.Nat
+\import Data.Bool
+\import Data.List
+\import Function.Meta
+\import Paths
+\import Paths.Meta
+
+\data Empty
+
+\func absurd {A : \Type} (e : Empty) : A
+
+\data Unit | unit
+
+\func \infix 4 <= (x y : Nat) : \Type
+  | 0, _ => Unit
+  | suc _, 0 => Empty
+  | suc x, suc y => x <= y
+
+\func length {A : \Type} (xs : List A) : Nat
+  | nil => 0
+  | :: _ xs => suc (length xs)
+
+\func <=-helper {x y : Nat} (p : x <= y) : x <= suc y \elim x, y
+  | 0, _ => unit
+  | suc x, 0 => absurd p
+  | suc x, suc y => <=-helper p
+
+\func filter' {A : \Type} (p : A -> Bool) (xs : List A) : List A \elim xs
+  | nil => nil
+  | :: x xs => if (p x) (:: x (filter' p xs)) (filter' p xs)
+
+-- Кажется, что по сути это тоже самое, что в Coq (unfold + destruct).
+-- То есть, чтобы сделать паттерн-матчинг по каким-то переменным внутри, я должен указать
+-- через \as синоним того, что я хочу "запаттерн-матчить" и тогда Arend раскроет на кейсы.
+\func filter'-lemma {A : \Type} (p : A -> Bool) (xs : List A) : length (filter' p xs) <= length xs \elim xs
+  | nil => unit
+  | :: x xs => \case p x \as b \return length (if b (:: x (filter' p xs)) (filter' p xs )) <= suc (length xs) \with {
+    | false => <=-helper $ filter'-lemma p xs
+    | true => filter'-lemma p xs
+  }
+
+-- По мотивам следующей задачки я смог соорудить вот такое, так (наверное?) менее понятно, но
+-- (наверное?) более идиоматично для Arend.
+\func filer'-lemma2 {A : \Type} (p : A -> Bool) (xs : List A) : length (filter' p xs) <= length xs \elim xs
+  | nil => unit
+  | :: x xs => \case p x \as ft, idp : p x = ft \with {
+    | false, ft => rewrite ft (<=-helper $ filer'-lemma2 p xs)
+    | true, ft => rewrite ft (filer'-lemma2 p xs)
+  }
+
+
+-- Exercise 3.
+-- Тут была очевидна идея, но я достаточно долго думал, как это верно записать.
+\func tripleFeqDoubleF (f : Bool -> Bool) (x : Bool) : f (f (f x)) = f x =>
+  \case (f true) \as ft, (f false) \as ff, idp : f true = ft, idp : f false = ff, \elim x \with{
+    | false, false, p, p1, false => rewrite p1 (rewrite p1 p1)
+    | false, false, p, p1, true => rewrite p (rewrite p1 p1)
+    | false, true, p, p1, false => rewrite p1 (rewrite p p1)
+    | false, true, p, p1, true => rewrite p (rewrite p1 p)
+    | true, false, p, p1, false => rewrite p1 (rewrite p1 p1)
+    | true, false, p, p1, true => rewrite p (rewrite p p)
+    | true, true, p, p1, false => rewrite p1 (rewrite p p)
+    | true, true, p, p1, true => rewrite p (rewrite p p)
+  }
+
+\open Nat
+\data DivMod (n m : Nat) | divRem (d : Nat) (r : Nat) (p : n = m * d + r)
+
+\func \infix 6 <=B (x y : Nat) : Bool \elim x, y
+  | 0, _ => true
+  | _, 0 => false
+  | suc n, suc m => n <=B m
+
+-- Не придумал, как доказать, что выполняется n = m * d + r
+-- Exercise 4.
+\func divmod (n m : Nat) : DivMod n m => \case (m <=B n) \with {
+  | true => {?}
+  | false => {?}
+}
+
+\func div (n m : Nat) (p : DivMod n m) : Nat \elim p
+  | divRem d r p => d
+
+
+-- Exercise 5
+\data Decide (A : \Type)
+  | yes A
+  | no (A -> Empty)
+
+\func DecPred {A : \Type} (P : A -> \Type) => \Pi (a : A) -> Decide (P a)
+
+\func isEven (n : Nat) => \Sigma (k : Nat) (n = 2 * k)
+\func isEven-1-Empty (k : Nat) (p : 1 = 2 * k) : Empty \elim k
+  | 0 => \case p
+  | suc n => \case p
+\func isEvenMinus2 (n : Nat) (k : Nat) (proof : suc (suc n) = 2 * k) : isEven n \elim k
+  | 0 => (0, pmap pred (pmap pred proof))
+  | suc n => (n, pmap pred (pmap pred proof))
+
+{-
+
+Насколько я понимаю, паттерн матчинг здесь (в функции выше) нужен,
+чтобы раскрыть функцию pred, потому что данная функция не проходит typecheck:
+
+\func isEvenMinus2' (n : Nat) (k : Nat) (proof : suc (suc n) = 2 * k) : isEven n =>
+  (pred k, pmap pred (pmap pred proof))
+
+-}
+\func decIsEven : DecPred isEven => \lam x => decideForEach x
+  \where \func decideForEach (x : Nat) : Decide (isEven x) \elim x
+    | 0 => yes (0, idp)
+    | 1 => no (\lam (k, proof) => isEven-1-Empty k proof)
+    | suc (suc n) => \case (decideForEach n) \with {
+      | yes (k, proof) => yes (k + 1, rewrite proof idp)
+      | no proof => no (\lam (k, proof_less) => proof $ isEvenMinus2 n k proof_less)
+    }
+
+\func suc/=0 {n : Nat} (p : suc n = 0) : Empty => transport (\lam n => \case n \with { | 0 => Empty | suc _ => Unit }) p unit
+\func DecEq (A : \Type) => \Pi (a a' : A) -> Decide (a = a')
+
+\class Eq (A : \Type) {
+  | decideEq : DecEq A
+  \func \infix 4 == (a a' : A) : Bool => \case decideEq a a' \with {
+    | yes _ => true
+    | no _ => false
+  }
+}
+
+{- Возможно проще было бы взять длину и сослаться на функцию suc/=0. -}
+\func nil/=:: {A : \Type} {x : A} {xs : List A} (p : x :: xs = nil) : Empty =>
+  transport (\lam p => \case p \with { | nil => Empty | :: _ _ => Unit}) p unit
+
+\instance ListEq {A : \Type} (dec : Eq A) : Eq (List A)
+  | decideEq => decideEq dec
+  \where
+    \func decideEq {A : \Type} (dec : Eq A) (xs ys : List A) : Decide (xs = ys) \elim xs, ys
+      | nil, nil => yes idp
+      | nil, y :: ys => no (\lam p => nil/=:: (inv p))
+      | x :: xs, nil => no nil/=::
+      | x :: xs, y :: ys => \case (dec.decideEq x y) \with {
+        | yes proof => rewrite proof \case (decideEq dec xs ys) \with {
+          | yes proof => yes (rewrite proof idp)
+          | no proof => no (\lam x => proof $ pmap tail x)
+        }
+        | no proof => no (\lam x' => proof $ pmap (headDef x) x')
+      }

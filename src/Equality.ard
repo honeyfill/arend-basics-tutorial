@@ -1,0 +1,153 @@
+\import Data.Bool
+\import Debug.Meta
+\import Function.Meta
+\import IndexedDataTypes (T, Unit, unit)
+\import Logic
+\import Paths.Meta
+
+\func transport {A : \Type} (B : A -> \Type) {a a' : A} (p : a = a') (b : B a) : B a'
+  => coe (\lam i => B (p @ i)) b right
+
+-- symmetry
+\func inv {A : \Type} {a a' : A} (p : a = a') : a' = a
+  => transport (\lam x => x = a) p idp
+
+-- transitivity
+\func trans {A : \Type} {a a' a'' : A} (p : a = a') (q : a' = a'') : a = a''
+  => transport (\lam x => a = x) q p
+
+-- congruence
+\func pmap {A B : \Type} (f : A -> B) {a a' : A} (p : a = a') : f a = f a'
+  => transport (\lam x => f a = f x) p idp
+
+-- Я пытался написать что-то, но оно к сожалению не работает. Я понял только как написать, используя path.
+-- Ниже есть попытка использовать rewrite.
+-- Exercise 1
+\func ppmap {A B C : \Type} (f : A -> B -> C) {a a' : A} {b b' : B} (p : a = a') (q : b = b') : f a b = f a' b'
+  => path (\lam i => f (p i) (q i))
+
+-- Exercise 2
+{- Где-то здесь я осознал, что в туториале "обратный принцип Лейбница" это и есть transport. -}
+\func repl {A B : \Type} : \Pi (p : A = B) -> A -> B =>
+  \lam p => transport (\lam x => x) p
+
+\func repl' {A B : \Type} (p : A = B) : A -> B => transport (\lam x => x) p
+
+-- f a b = (f a) (b)
+-- pmap должен вернуть f a b = f a' b' -> должен вернуть (f a) b = (f a') b'
+-- через pmap легко получить что-то вида (f a) b' = (f a') b'
+-- мне еще нужно как-то подставить b' -> b в левой части
+-- TODO: попробовать сделать без rewrite
+\func ppmap' {A B C : \Type} (f : A -> B -> C) {a a' : A} (p : a = a') {b b' : B} (q : b = b') : f a b = f a' b'
+  => rewrite q (pmap (\lam y => f y b') p)
+
+-- Exercise 3.
+{-
+Как я понял, это работает достаточно забавно: я хочу показать, что left = right,
+значит я хочу построить f : I -> I, при этом, чтобы f left = left, а f right = right.
+-}
+\func left=right : left = right => path (\lam x => x)
+
+-- Exercise 4.
+\func sigmaEq {A B : \Type} {a a' : A} {b b' : B} (p : a = a') (q : b = b')
+  : (\Sigma (a : A) (b : B)) = (\Sigma (a' : A) (b' : B))
+    => ppmap' (\lam (x : A) (y : B) => \Sigma (x : A) (y : B)) p q
+
+-- Exercise 5.
+\func projEq {A B : \Type} {a a' : A} {b b' : B} {p p1 : \Sigma (a : A) (b : B)} (proof : p = p1) : p.1 = p1.1 =>
+  pmap (\lam x => x.1) proof
+
+\func funExt {A : \Type} (B : A -> \Type) {f g : \Pi (a : A) -> B a}
+             (p : \Pi (a : A) -> f a = g a) : f = g
+  => path (\lam i => \lam a => p a @ i)
+
+-- Exercise 6.
+\func boolInv (x : Bool) : not (not x) = x
+  | true => idp
+  | false => idp
+
+\func boolInvEqId {x : Bool} : (\lam x => not (not x)) = (\lam x => x) => funExt (\lam _ => Bool) boolInv
+
+{- Забавно, что все упражнения кроме первого я суммарно сделал быстрее, чем его, да так и не смог закончить. -}
+
+-- Exercise 7.
+
+\func Nat-rec (P : \Type)
+              (z : P)
+              (s : Nat -> P -> P)
+              (x : Nat) : P \elim x
+  | zero => z
+  | suc n => s n (Nat-rec P z s n)
+
+\func Nat-rec-fac (x : Nat) : Nat => Nat-rec Nat 1 (\lam x y => (x Nat.+ 1) Nat.* y) x
+
+\func Nat-rec-fac-test => println (Nat-rec-fac 4)
+
+\func Nat-elim (P : Nat -> \Type)
+               (z : P zero)
+               (s : \Pi (n : Nat) -> P n -> P (suc n))
+               (x : Nat) : P x \elim x
+  | zero => z
+  | suc n => s n (Nat-elim P z s n)
+
+-- Exercise 8
+\open Nat
+\func assoc-Nat+ (x y z : Nat) : x + (y + z) = (x + y) + z =>
+  Nat-elim (\lam x' => x' + (y + z) = (x' + y) + z) idp (\lam _ x => pmap suc x) x
+
+
+-- Exercise 9
+\data D
+  | con1 Nat
+  | con2 D D
+  | con3 (Nat -> D)
+
+\func D-rec (P : \Type)
+            (f1 : Nat -> P)
+            (f2 : D -> D -> P -> P -> P)
+            (f3 : (Nat -> \Sigma D P) -> P)
+            (x : D) : P \elim x
+  | con1 x => f1 x
+  | con2 x y => f2 x y (D-rec P f1 f2 f3 x) (D-rec P f1 f2 f3 y)
+  | con3 f' => f3 (\lam t => (f' t , D-rec P f1 f2 f3 $ f' t))
+
+-- Exercise 12
+{- Тут я немного тормозил почему не работает transport B left=right b,
+пока не понял, что у меня нет симметрии.
+ -}
+\func bRight->bLeft {B : I -> \Type} (b : B right) : B left =>
+  transport B (inv left=right) b
+
+-- Exercise 11
+{- Почему-то мне было понятнее сначала сделать 12 упражнение. Скорее всего, потому что
+я не увидел определение функции, данное в условии.
+ -}
+\func coe0 (A : I -> \Type) (a : A left) : A right =>
+  transport A left=right a
+
+-- Exercise 12
+\func Tnat (n : Nat) : \Type
+  | zero => Empty
+  | suc x => Unit
+
+-- Exercise 13
+\func true/=false (p : true = false) : Empty => transport T p unit
+
+\func sucX/=zero {n : Nat} (p : suc n = 0) : Empty =>
+  transport Tnat p unit
+
+-- Exercise 14
+\func fac (n : Nat) : Nat
+  | zero => 1
+  | suc n => (n + 1) * fac n
+
+\func \infixl 6 <=2 (n : Nat) : Bool
+  | 0 => true
+  | 1 => true
+  | 2 => true
+  | _ => false
+{-
+Я сначала пытался через транспорт, но закопался, поэтому решил воспользоваться тем, что уже есть.
+ -}
+\func facX/=sucX (p : suc = fac) : Empty => true/=false $ inv (pmap (\lam x => <=2 $ x 2) p)
+
