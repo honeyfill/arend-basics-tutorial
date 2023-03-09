@@ -1,4 +1,9 @@
 \import Data.Bool
+\import Equality (inv, trans)
+\import Function.Meta
+\import HLevel
+\import Logic
+\import Paths.Meta
 
 {-
 В прошлый раз у меня не получилось написать gcd.
@@ -9,34 +14,93 @@
   | _, 0 => true
   | suc n, suc m => n >= m
 
+\func \infix 6 < (x y : Nat) : Bool
+  | _, 0 => false
+  | 0, suc n => true
+  | suc n, suc m => n < m
+
+\func x<x {x : Nat} : x < x = false \elim x
+  | 0 => idp
+  | suc n => x<x
+
 \func \infix 5 - (x y : Nat) : Nat
-  | x, 0 => x
   | 0, _ => 0
+  | suc n, 0 => suc n
   | suc n, suc m => n - m
 
+\func XminisX {x : Nat} : x - x = 0 \elim x
+  | 0 => idp
+  | suc x => XminisX
+
+\func \infix 7 mod (x y : Nat) : Nat => mod_helper x x y
+  \where
+  \func mod_helper (cnt x y : Nat) : Nat \elim cnt
+  | 0 => 0
+  | suc t => \case x < y \with {
+    | true => x
+    | false => mod_helper t (x - y) y
+  }
+
+{- В этот раз проверил repl'ом -}
 \func gcd (x y : Nat) : Nat => gcd_helper x x y
     \where \func gcd_helper (count x y : Nat) : Nat \elim count
-      | 0 => 0
+      | 0 => y
       | suc n => \case x \with {
-        | 0 => x
+        | 0 => y
         | suc t => \case y \with {
-          | 0 => 0
-          | suc k => \case (x >= y) \with {
-            | true => gcd_helper n (x - y) y
-            | false => gcd_helper n (y - x) x
-          }
+          | 0 => x
+          | suc k => gcd_helper n (y mod x) x
         }
       }
 
 {-
-Огромный минус этого определения: в его рамках сложно что-то доказывать.
-По крайней мере мне тяжело показать, почему свойство ниже будет выполнено, так как есть первый аргумент.
+Как я понимаю нужно показать, что gcd_rec это Prop, тогда я смогу, доказав gcd_is_gcd, показать, что
+gcd x y = gcd y x.
 -}
-\func comm-gcd_helper {x y : Nat} : gcd.gcd_helper x x y = gcd.gcd_helper y y x \elim x, y
-  | 0, 0 => idp
-  | 0, suc n => idp
-  | suc n, 0 => idp
-  | suc n, suc m => {?}
+\record gcd_rec
+  (x y gcd : Nat)
+  (gcd_divX : x mod gcd = 0)
+  (gcd_divY : y mod gcd = 0)
+  (gcd_h : \Pi (another : Nat) -> x mod another = 0 -> y mod another = 0 -> gcd mod another = 0)
+
+\func x_mod_0 (x y : Nat) : mod.mod_helper x 0 y = 0 \elim x
+  | 0 => idp
+  | suc n => \case 0 < y \as abs, idp : 0 < y = abs \with {
+    | true, p => rewrite p idp
+    | false, p => rewrite p (x_mod_0 n y)
+  }
+
+\lemma x<xAbsurd {x : Nat} (T : x < x = true) : Empty => true/=false $ inv $ trans (inv x<x) T
+
+\func x_mod_helper_x0 (x : Nat) : mod.mod_helper x x x = 0 \elim x
+  | 0 => idp
+  | suc a => \case a < a \as abs, idp : a < a = abs, \return (\case abs \with {| true => suc a | false => mod.mod_helper a (a - a) (suc a)}) = 0 \with {
+    | false, p => rewrite XminisX (x_mod_0 a (suc a))
+    | true, p => absurd (x<xAbsurd p)
+  }
+
+\func x_mod_x_0 {x : Nat} : x mod x = 0 => x_mod_helper_x0 x
+
+\func gcd-isProp (x y : Nat) : isProp (gcd_rec x y) =>
+  \lam (gcd1 gcd2 : gcd_rec x y) => path (
+    \lam i => \new gcd_rec x y {
+    | gcd => {?}
+    | gcd_divX => {?}
+    | gcd_divY => {?}
+    | gcd_h => {?}
+  }
+)
+
+\func gcd_zero (x : Nat) (gcd1 : gcd_rec x 0) : gcd_rec x 0 x \cowith {
+  | gcd_divX => x_mod_x_0
+  | gcd_divY => idp
+  | gcd_h => {?}
+}
+
+\func gcd_is_gcd (x y : Nat) : gcd_rec x y (gcd x y) \cowith
+  | gcd_divX => {?}
+  | gcd_divY => {?}
+  | gcd_h => {?}
 
 \func assoc-boolOr {x y z : Bool} : x or (y or z) = (x or y) or z \elim x
   | true => idp

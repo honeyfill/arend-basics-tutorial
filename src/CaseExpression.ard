@@ -1,6 +1,7 @@
 \import Arith.Nat
 \import Data.Bool
 \import Data.List
+\import Function
 \import Function.Meta
 \import Paths
 \import Paths.Meta
@@ -127,15 +128,14 @@
 }
 
 {- Возможно проще было бы взять длину и сослаться на функцию suc/=0. -}
-\func nil/=:: {A : \Type} {x : A} {xs : List A} (p : x :: xs = nil) : Empty =>
-  transport (\lam p => \case p \with { | nil => Empty | :: _ _ => Unit}) p unit
+\func nil/=:: {A : \Type} {x : A} {xs : List A} (p : x :: xs = nil) : Empty => \case p
 
 \instance ListEq {A : \Type} (dec : Eq A) : Eq (List A)
   | decideEq => decideEq dec
   \where
     \func decideEq {A : \Type} (dec : Eq A) (xs ys : List A) : Decide (xs = ys) \elim xs, ys
       | nil, nil => yes idp
-      | nil, y :: ys => no (\lam p => nil/=:: (inv p))
+      | nil, y :: ys => no (nil/=:: `o` inv)
       | x :: xs, nil => no nil/=::
       | x :: xs, y :: ys => \case (dec.decideEq x y) \with {
         | yes proof => rewrite proof \case (decideEq dec xs ys) \with {
