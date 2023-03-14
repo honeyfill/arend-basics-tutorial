@@ -111,6 +111,15 @@
   | con2 x y => f2 x y (D-rec P f1 f2 f3 x) (D-rec P f1 f2 f3 y)
   | con3 f' => f3 (\lam t => (f' t , D-rec P f1 f2 f3 $ f' t))
 
+\func D-elim  (P : D -> \Type)
+              (f1 : \Pi (x : Nat) -> P (con1 x))
+              (f2 : \Pi (x1 x2 : D) -> P x1 -> P x2 -> P (con2 x1 x2))
+              (f3 : \Pi (f : Nat -> \Sigma (x1 : D) (p : P x1)) -> P (con3 $ \lam t => (f t).1))
+              (x : D) : P x \elim x
+  | con1 x => f1 x
+  | con2 x y => f2 x y (D-elim P f1 f2 f3 x) (D-elim P f1 f2 f3 y)
+  | con3 g => f3 (\lam t => (g t, D-elim P f1 f2 f3 (g t)))
+
 -- Exercise 12
 {- Тут я немного тормозил почему не работает transport B left=right b,
 пока не понял, что у меня нет симметрии.

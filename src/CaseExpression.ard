@@ -1,9 +1,11 @@
 \import Arith.Nat
 \import Data.Bool
 \import Data.List
+\import Function
 \import Function.Meta
 \import Paths
 \import Paths.Meta
+
 
 \data Empty
 
@@ -53,14 +55,14 @@
 -- Тут была очевидна идея, но я достаточно долго думал, как это верно записать.
 \func tripleFeqDoubleF (f : Bool -> Bool) (x : Bool) : f (f (f x)) = f x =>
   \case (f true) \as ft, (f false) \as ff, idp : f true = ft, idp : f false = ff, \elim x \with{
-    | false, false, p, p1, false => rewrite p1 (rewrite p1 p1)
-    | false, false, p, p1, true => rewrite p (rewrite p1 p1)
-    | false, true, p, p1, false => rewrite p1 (rewrite p p1)
-    | false, true, p, p1, true => rewrite p (rewrite p1 p)
-    | true, false, p, p1, false => rewrite p1 (rewrite p1 p1)
-    | true, false, p, p1, true => rewrite p (rewrite p p)
-    | true, true, p, p1, false => rewrite p1 (rewrite p p)
-    | true, true, p, p1, true => rewrite p (rewrite p p)
+    | false, false, p, p1, false => rewrite (p1, p1) p1
+    | false, false, p, p1, true => rewrite (p, p1) p1
+    | false, true, p, p1, false => rewrite (p1, p) p1
+    | false, true, p, p1, true => rewrite (p, p1) p
+    | true, false, p, p1, false => rewrite (p1, p1) p1
+    | true, false, p, p1, true => rewrite (p, p) p
+    | true, true, p, p1, false => rewrite (p1, p) p
+    | true, true, p, p1, true => rewrite (p, p) p
   }
 
 \open Nat
@@ -127,15 +129,14 @@
 }
 
 {- Возможно проще было бы взять длину и сослаться на функцию suc/=0. -}
-\func nil/=:: {A : \Type} {x : A} {xs : List A} (p : x :: xs = nil) : Empty =>
-  transport (\lam p => \case p \with { | nil => Empty | :: _ _ => Unit}) p unit
+\func nil/=:: {A : \Type} {x : A} {xs : List A} (p : x :: xs = nil) : Empty => \case p
 
 \instance ListEq {A : \Type} (dec : Eq A) : Eq (List A)
   | decideEq => decideEq dec
   \where
     \func decideEq {A : \Type} (dec : Eq A) (xs ys : List A) : Decide (xs = ys) \elim xs, ys
       | nil, nil => yes idp
-      | nil, y :: ys => no (\lam p => nil/=:: (inv p))
+      | nil, y :: ys => no (nil/=:: `o` inv)
       | x :: xs, nil => no nil/=::
       | x :: xs, y :: ys => \case (dec.decideEq x y) \with {
         | yes proof => rewrite proof \case (decideEq dec xs ys) \with {
