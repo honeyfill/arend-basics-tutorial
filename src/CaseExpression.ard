@@ -6,6 +6,7 @@
 \import Paths
 \import Paths.Meta
 
+
 \data Empty
 
 \func absurd {A : \Type} (e : Empty) : A
@@ -54,14 +55,14 @@
 -- Тут была очевидна идея, но я достаточно долго думал, как это верно записать.
 \func tripleFeqDoubleF (f : Bool -> Bool) (x : Bool) : f (f (f x)) = f x =>
   \case (f true) \as ft, (f false) \as ff, idp : f true = ft, idp : f false = ff, \elim x \with{
-    | false, false, p, p1, false => rewrite p1 (rewrite p1 p1)
-    | false, false, p, p1, true => rewrite p (rewrite p1 p1)
-    | false, true, p, p1, false => rewrite p1 (rewrite p p1)
-    | false, true, p, p1, true => rewrite p (rewrite p1 p)
-    | true, false, p, p1, false => rewrite p1 (rewrite p1 p1)
-    | true, false, p, p1, true => rewrite p (rewrite p p)
-    | true, true, p, p1, false => rewrite p1 (rewrite p p)
-    | true, true, p, p1, true => rewrite p (rewrite p p)
+    | false, false, p, p1, false => rewrite (p1, p1) p1
+    | false, false, p, p1, true => rewrite (p, p1) p1
+    | false, true, p, p1, false => rewrite (p1, p) p1
+    | false, true, p, p1, true => rewrite (p, p1) p
+    | true, false, p, p1, false => rewrite (p1, p1) p1
+    | true, false, p, p1, true => rewrite (p, p) p
+    | true, true, p, p1, false => rewrite (p1, p) p
+    | true, true, p, p1, true => rewrite (p, p) p
   }
 
 \open Nat
