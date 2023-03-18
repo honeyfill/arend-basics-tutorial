@@ -66,22 +66,98 @@
   }
 
 \open Nat
-\data DivMod (n m : Nat) | divRem (d : Nat) (r : Nat) (p : n = m * d + r)
+\data DivMod (n m : Nat)
+  | divRem (d : Nat) (r : Nat) (q : r < m = true) (p : n = d * m + r)
 
-\func \infix 6 <=B (x y : Nat) : Bool \elim x, y
-  | 0, _ => true
+\func \infix 6 < (x y : Nat) : Bool \elim x, y
   | _, 0 => false
-  | suc n, suc m => n <=B m
+  | 0, _ => true
+  | suc n, suc m => n < m
+
+\func \infix 6 > (x y : Nat) : Bool \elim x, y
+  | 0, _ => false
+  | _, 0 => true
+  | suc n, suc m => n > m
 
 -- Не придумал, как доказать, что выполняется n = m * d + r
 -- Exercise 4.
-\func divmod (n m : Nat) : DivMod n m => \case (m <=B n) \with {
-  | true => {?}
-  | false => {?}
-}
+\data \fixr 2 Either (A B : \Type)
+  | inl A
+  | inr B
 
-\func div (n m : Nat) (p : DivMod n m) : Nat \elim p
-  | divRem d r p => d
+-- Исходя из Вашей подсказки, я понял, что нужно сделать доказательство через сравнение.
+\func total_comparsion (n m : Nat) : Either (n < m = true) (Either (n > m = true) (n = m)) \elim n, m
+  | 0, 0 => inr (inr idp)
+  | 0, suc t => inl idp
+  | suc t, 0 => inr (inl idp)
+  | suc t, suc k => helper_level_2 (total_comparsion t k)
+  \where
+    \func helper_level_2 {n m : Nat} (p : Either (n < m = true) (Either (n > m = true) (n = m)))
+      : Either (n < m = true) (Either (n > m = true) (suc n = suc m)) \elim p
+      | inl a => inl a
+      | inr b => inr (helper_level_1 b)
+    \where
+      \func helper_level_1 {n m : Nat} (p : Either (n > m = true) (n = m))
+        : Either (n > m = true) (suc n = suc m) \elim p
+        | inl a => inl a
+        | inr b => inr (pmap suc b)
+
+\open NatSemiring (*-comm, +-assoc, +-comm)
+
+-- В этот момент я был очень сильно удивлен, что, засчет "p : n > m = true", Arend все понял.
+\func MinusAddPos (n m : Nat) (p : n > m = true) : n -' m + m = n \elim n, m
+  | 0, 0 => idp
+  | suc t, 0 => idp
+  | suc t, suc k => pmap suc (MinusAddPos t k p)
+
+\func >sucImp> {n m : Nat} (p : n > suc m = true) : n > m = true \elim n, m
+  | suc n, 0 => idp
+  | suc n, suc m => >sucImp> p
+
+-- Я не очень понял, как указать, что я хочу сделать 2 rewrite в одном rewrite в разных позициях.
+\func sucDmult {n : Nat} (m : Nat) : suc n * m = n * m + m =>
+  rewrite {2} *-comm (rewrite {1} *-comm idp)
+
+\func foldAddMinus {n m : Nat} (p : n > m = true) : n = n -' m + m =>
+  inv (MinusAddPos n m p) *> idp
+
+\func secondAddComm {m d r : Nat} : d * m + r + m = d * m + m + r =>
+  rewrite +-assoc (rewrite {2} +-comm (rewrite (inv +-assoc) idp))
+
+\func divModGe {n m : Nat} (p : n > m = true) (q : DivMod (n -' m) m) : DivMod n m \elim q
+  | divRem d r q1 p1 =>
+    divRem (d + 1) r q1 (rewrite (sucDmult m, inv secondAddComm, foldAddMinus p) (pmap (\lam x => x + m) p1))
+
+\func \infix 1 /=' {A : \Type} (a a' : A) => (a = a') -> Empty
+
+\func notEqImplLeZero {m : Nat} (p : m /=' 0) : 0 < m = true \elim m
+  | 0 => absurd (p idp)
+  | suc t => idp
+
+-- Чтобы посмотреть в REPL итог.
+\func five/=0 : 5 /=' 0 => \lam p => \case p
+\func three/=0 : 3 /=' 0 => \lam p => \case p
+
+
+-- Без fuel у меня ломается termination check, но что вернуть в случае 0 я не понимаю.
+-- По сути верно свойство, что fuel >= n => если fuel = 0 => n = 0 => понятно, что вернуть.
+-- Но это звучит слишком запутанно и мне кажется решается более элегантно.
+
+\func divmod (n m : Nat) (p : m /=' 0) : DivMod n m => divModfuel n n m p
+  \where \func divModfuel (fuel n m : Nat) (p : m /=' 0) : DivMod n m
+    \elim fuel
+      | 0 => {?}
+      | suc t =>
+        \case total_comparsion n m \with {
+          | inl a => divRem 0 n a (rewrite *-comm idp)
+          | inr b => \case b \with {
+            | inl a => divModGe a (divmod.divModfuel t (n -' m) m p)
+            | inr b1 => divRem 1 0 (notEqImplLeZero p) (rewrite (inv b1, *-comm) idp)
+          }
+        }
+
+\func divAndMod (n m : Nat) (p : DivMod n m) : \Sigma Nat Nat \elim p
+  | divRem d r p t => (d, r)
 
 
 -- Exercise 5
