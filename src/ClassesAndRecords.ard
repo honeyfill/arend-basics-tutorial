@@ -1,6 +1,9 @@
 \import Basics
 \import Data.Maybe
 \import Function.Meta
+\import Meta
+\import Paths
+\import Paths.Meta
 
 -- Exercise 1
 \record Pair (A B : \Type)
@@ -61,6 +64,10 @@
 
 
 -- Для монад нужен bind и return и их свойства, как я помню.
+\func funExt {A : \Type} (B : A -> \Type) {f g : \Pi (a : A) -> B a}
+             (p : \Pi (a : A) -> f a = g a) : f = g
+  => path (\lam i => \lam a => p a @ i)
+
 \class Monad \extends Functor {
   | return {A : \Type} : A -> F A
   | bind {A B : \Type} : F A -> (A -> F B) -> F B
@@ -73,7 +80,11 @@
   -- и свойства кажется сразу могу доказать, потому что любая монада является функтором.
   | fmap-id x => right-id x
   -- вот последнее оказалось сложноватым, наверное стоит сначала написать на листочке цепочку
-  -- TODO: листочек
+  -- unfold fmap помог доказать, потому что я видел, что доказываю.
+  -- но потом я задумался, что определение внутри само раскроется и понял, что можно просто убрать.
+  | fmap-comp f g x => inv $
+    assoc-bind x (\lam a => return (f a)) (\lam b => return (g b)) *>
+    pmap (bind x) (funExt (\lam _ => _) (\lam x => left-id (f x) (\lam y => return (g y))))
 }
 
 \instance MaybeMonad : Monad Maybe => \new Monad {
@@ -81,10 +92,6 @@
   | bind x f => \case x \with {
     | nothing => nothing
     | just x => f x
-  }
-  | fmap-comp f g x => \case \elim x \with {
-    | nothing => idp
-    | just t => idp
   }
   | left-id x f => idp
   | right-id x => \case \elim x \with {
@@ -95,4 +102,42 @@
     | nothing => idp
     | just t => idp
   }
+}
+
+\record State (S A : \Type)
+  | state : S -> \Sigma S A
+
+\data State' (S A : \Type)
+  | state' (S -> \Sigma S A)
+
+\instance StateMonad (S : \Type) : Monad (State S) => \new Monad {
+  | return x => \new State {
+    | state s => (s, x)
+  }
+  -- не очень понимаю почему нужно явно указывать тип, если я хочу сделать x.state
+  | bind {A} {B} (x : State S A) f => \new State {
+    | state s => \case x.state s \with {
+      | (s1, a) => \let stateB : State S B => f a \in stateB.state s1
+    }
+  }
+  | left-id x f => idp
+  | right-id x => idp
+  | assoc-bind x f g => idp
+}
+
+-- Эта функция мне пригодилась, потому что если внутри bind x f делать \case _ \with,
+-- то потом у меня не раскрывались определения в right-id, assoc-bind, что усложняло доказательства.
+\func eval {S A : \Type} (st : State' S A) (s : S) : \Sigma S A \elim st
+  | state' st => st s
+
+\instance State'Monad (S : \Type) : Monad (State' S) => \new Monad {
+  | return x => state' (\lam s => (s, x))
+  | bind x f => state' (\lam s => \let (eval_s, eval_x) => eval x s \in eval (f eval_x) eval_s)
+  | left-id a f => cases (f a) \with {
+    | state' _x => idp
+  }
+  | right-id x => \case \elim x \with {
+    | state' _x => idp
+  }
+  | assoc-bind x f g => idp
 }
