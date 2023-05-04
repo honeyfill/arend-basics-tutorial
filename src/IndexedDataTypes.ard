@@ -1,3 +1,4 @@
+\import Arith.Nat
 \import Data.Bool
 \import Data.List
 \import Function.Meta
@@ -83,15 +84,44 @@
   | 0 => cleaf
   | suc n => cnode (CTree A n) A (CTree A n)
 
--- Матрица n x m это отображение Vec A n -> Vec A m
--- Можно было определить матрицу, как Vec (Vec A m) n, но я не знаю, что проще доказывать и определять
 -- Exercise 6
-\func VecAdd {A : \Type} {n : Nat} (f : A -> A -> A) (a b : Vec A n) : Vec A n \elim n, a, b
-  | 0, fnil, fnil => fnil
-  | suc n, fcons a' ax, fcons b' bx => fcons (f a' b') (VecAdd f ax bx)
+\func Mat (A : \Type) (n m : Nat) : \Type => Vec (Vec A m) n
 
-\func MatricesAdd {A : \Type} (f : A -> A -> A) {n m : Nat} (F G : Vec A n -> Vec A m) : Vec A n -> Vec A m =>
-  \lam x => VecAdd f (F x) (G x)
+\func make_offset_vector {A : \Type} (offset m : Nat) (e zero : A) : Vec A m \elim offset, m
+  | _, 0 => fnil
+  | 0, suc t => fcons e (Replicate zero t)
+  | suc off, suc t => fcons zero (make_offset_vector off t e zero)
+
+\func diag {A : \Type} (n : Nat) (e zero : A) : Mat A n n => build_diag 0 n n e zero
+    \where \func build_diag {A : \Type} (x y z : Nat) (e zero : A) : Mat A y z \elim y
+      | 0 => fnil
+      | suc t => fcons (make_offset_vector x z e zero) (build_diag (suc x) t z e zero)
+
+\func mat+ {A : \Type} {n m : Nat} (f : A -> A -> A) (mat1 mat2 : Mat A n m) : Mat A n m \elim n, mat1, mat2
+  | 0, fnil, fnil => fnil
+  | suc t, fcons x xs, fcons y ys => fcons (ZipWith x y f) (mat+ f xs ys)
+
+\func Head {A : \Type} {n : Nat} (vec1 : Vec A (suc n)) : A \elim n, vec1
+  | _, fcons x xs => x
+
+\func Tail {A : \Type} {n : Nat} (vec1 : Vec A (suc n)) : Vec A n \elim n, vec1
+  | _, fcons x xs => xs
+
+\func split_column {A : \Type} {n m : Nat} (mat1 : Mat A n (suc m)) : \Sigma (Vec A n) (Mat A n m) \elim n, mat1
+  | 0, fnil => (fnil, fnil)
+  | suc t, fcons x xs => (fcons (Head x) (split_column xs).1, fcons (Tail x) (split_column xs).2)
+
+\func transpose {A : \Type} {n m : Nat} (mat : Mat A n m) : Mat A m n \elim m
+  | 0 => fnil
+  | suc t => fcons (split_column mat).1 (transpose (split_column mat).2)
+
+{- Матрицы могут еще такими быть: Fin n -> Fin m -> A -}
+
+\func AddFinMat {A : \Type} {n m : Nat} (f : A -> A -> A) (Mat1 Mat2 : Fin n -> Fin m -> A) : Fin n -> Fin m -> A =>
+  \lam x y => f (Mat1 x y) (Mat2 x y)
+
+\func TransposeFinMat {A : \Type} {n m : Nat} (Mat1 : Fin n -> Fin m -> A) : Fin m -> Fin n -> A =>
+  \lam x y => Mat1 y x
 
 -- Сделать тут не 3 конструктора у меня не получилось, хотя я очень хотел.
 -- Exercise 8

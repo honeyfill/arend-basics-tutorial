@@ -1,9 +1,12 @@
 \import Arith.Nat
 \import Data.Bool
 \import Data.List
+\import Function
 \import Function.Meta
+\import Meta
 \import Paths
 \import Paths.Meta
+
 
 \data Empty
 
@@ -53,34 +56,104 @@
 -- Тут была очевидна идея, но я достаточно долго думал, как это верно записать.
 \func tripleFeqDoubleF (f : Bool -> Bool) (x : Bool) : f (f (f x)) = f x =>
   \case (f true) \as ft, (f false) \as ff, idp : f true = ft, idp : f false = ff, \elim x \with{
-    | false, false, p, p1, false => rewrite p1 (rewrite p1 p1)
-    | false, false, p, p1, true => rewrite p (rewrite p1 p1)
-    | false, true, p, p1, false => rewrite p1 (rewrite p p1)
-    | false, true, p, p1, true => rewrite p (rewrite p1 p)
-    | true, false, p, p1, false => rewrite p1 (rewrite p1 p1)
-    | true, false, p, p1, true => rewrite p (rewrite p p)
-    | true, true, p, p1, false => rewrite p1 (rewrite p p)
-    | true, true, p, p1, true => rewrite p (rewrite p p)
+    | false, false, p, p1, false => rewrite (p1, p1) p1
+    | false, false, p, p1, true => rewrite (p, p1) p1
+    | false, true, p, p1, false => rewrite (p1, p) p1
+    | false, true, p, p1, true => rewrite (p, p1) p
+    | true, false, p, p1, false => rewrite (p1, p1) p1
+    | true, false, p, p1, true => rewrite (p, p) p
+    | true, true, p, p1, false => rewrite (p1, p) p
+    | true, true, p, p1, true => rewrite (p, p) p
   }
 
 \open Nat
-\data DivMod (n m : Nat) | divRem (d : Nat) (r : Nat) (p : n = m * d + r)
+\data DivMod (n m : Nat)
+  | divRem (d : Nat) (r : Nat) (q : m > r = true) (p : n = d * m + r)
 
-\func \infix 6 <=B (x y : Nat) : Bool \elim x, y
-  | 0, _ => true
+\func \infix 6 < (x y : Nat) : Bool \elim x, y
   | _, 0 => false
-  | suc n, suc m => n <=B m
+  | 0, _ => true
+  | suc n, suc m => n < m
+
+\func \infix 6 > (x y : Nat) : Bool \elim x, y
+  | 0, _ => false
+  | _, 0 => true
+  | suc n, suc m => n > m
 
 -- Не придумал, как доказать, что выполняется n = m * d + r
 -- Exercise 4.
-\func divmod (n m : Nat) : DivMod n m => \case (m <=B n) \with {
-  | true => {?}
-  | false => {?}
+\data \fixr 2 Either (A B : \Type)
+  | inl A
+  | inr B
+
+-- Исходя из Вашей подсказки, я понял, что нужно сделать доказательство через сравнение.
+\func total_comparsion (n m : Nat) : Either (m > n = true) (Either (n > m = true) (n = m)) \elim n, m
+  | 0, 0 => inr (inr idp)
+  | 0, suc t => inl idp
+  | suc t, 0 => inr (inl idp)
+  | suc t, suc k => helper_level_2 (total_comparsion t k)
+  \where
+    \func helper_level_2 {n m : Nat} (p : Either (m > n = true) (Either (n > m = true) (n = m)))
+      : Either (m > n = true) (Either (n > m = true) (suc n = suc m)) \elim p
+      | inl a => inl a
+      | inr b => inr (helper_level_1 b)
+    \where
+      \func helper_level_1 {n m : Nat} (p : Either (n > m = true) (n = m))
+        : Either (n > m = true) (suc n = suc m) \elim p
+        | inl a => inl a
+        | inr b => inr (pmap suc b)
+
+\open NatSemiring (*-comm, +-assoc, +-comm)
+
+\func CasesMore {m r : Nat} (p : m > r = true) : Either (m = r + 1) (m > (r + 1) = true) \elim m, r
+  | suc t, 0 => helper-base p
+  | suc m, suc r => \case CasesMore p \with {
+    | inl a => inl (pmap suc a)
+    | inr b => inr b
+  }
+  | 0, 0 => inr p
+  \where \func helper-base {m : Nat} (p : m > 0 = true) : Either (m = 1)  (m > 1 = true) \elim m
+    | 0 => inr p
+    | 1 => inl idp
+    | suc (suc t) => inr p
+
+
+\func ApplyEq {m a : Nat} (p : a > m = true) (q : m = a) : a > a = true => rewrite {2} (inv q) p
+
+\func AntiReflexive> {a : Nat} (p : a > a = true) : Empty \elim a
+  | 0 => \case (inv p)
+  | suc t => AntiReflexive> p
+
+\func Transitivity> {n m k : Nat} (p : n > m = true) (q : m > k = true) : n > k = true \elim n, m, k
+  | 0, suc m, suc k => p
+  | suc n, 0, 0 => p
+  | suc n, suc m, 0 => q
+  | suc n, suc m, suc k => Transitivity> p q
+
+\func AntiSymmetric> {a m : Nat} (p : a > m = true) (q : m > a = true) : Empty => AntiReflexive> $ Transitivity> p q
+
+\func absurd_comp {m r : Nat} (p : (r + 1) > m = true) (q : m > r = true) : Empty => \case CasesMore q \with {
+  | inl a => AntiReflexive> (ApplyEq p a)
+  | inr b => AntiSymmetric> p b
 }
 
-\func div (n m : Nat) (p : DivMod n m) : Nat \elim p
-  | divRem d r p => d
+\func divmod (n m : Nat) (p : m > 0 = true) : DivMod n m \elim n
+  | 0 => divRem 0 0 p (rewrite *-comm idp)
+  | suc t => \case divmod t m p \with {
+    | divRem d r q p1 => \case total_comparsion m (suc r) \with {
+      | inr b => \case b \with {
+        | inl a => divRem d (suc r) a (pmap suc p1)
+        | inr b => divRem (suc d) 0 p (rewrite (helper b) (pmap suc p1))
+      }
+      | inl a => absurd (absurd_comp a q)
+    }
+  }
+  \where
+    \func helper {d m r : Nat} (p : m = suc r) : suc d * m = d * m + suc r =>
+      rewrite {1} *-comm (rewrite {1} *-comm (rewrite p idp))
 
+\func divAndMod (n m : Nat) (p : DivMod n m) : \Sigma Nat Nat \elim p
+  | divRem d r p t => (d, r)
 
 -- Exercise 5
 \data Decide (A : \Type)
@@ -127,15 +200,14 @@
 }
 
 {- Возможно проще было бы взять длину и сослаться на функцию suc/=0. -}
-\func nil/=:: {A : \Type} {x : A} {xs : List A} (p : x :: xs = nil) : Empty =>
-  transport (\lam p => \case p \with { | nil => Empty | :: _ _ => Unit}) p unit
+\func nil/=:: {A : \Type} {x : A} {xs : List A} (p : x :: xs = nil) : Empty => \case p
 
 \instance ListEq {A : \Type} (dec : Eq A) : Eq (List A)
   | decideEq => decideEq dec
   \where
     \func decideEq {A : \Type} (dec : Eq A) (xs ys : List A) : Decide (xs = ys) \elim xs, ys
       | nil, nil => yes idp
-      | nil, y :: ys => no (\lam p => nil/=:: (inv p))
+      | nil, y :: ys => no (nil/=:: `o` inv)
       | x :: xs, nil => no nil/=::
       | x :: xs, y :: ys => \case (dec.decideEq x y) \with {
         | yes proof => rewrite proof \case (decideEq dec xs ys) \with {
@@ -144,3 +216,30 @@
         }
         | no proof => no (\lam x' => proof $ pmap (headDef x) x')
       }
+
+\func T (b : Bool) : \Type
+  | true => Unit
+  | false => Empty
+
+\func FromBoolToDec {A : \Type} (p : A -> Bool) : \Sigma (P : A -> \Type) (DecPred P)
+  => (\lam a => T (p a), \lam a => \case p a \as b \return Decide (T b) \with {
+    | true => yes unit
+    | false => no (\lam x => x)
+  })
+
+\func FromDecToBool {A : \Type} (P : \Sigma (P : A -> \Type) (DecPred P)) : A -> Bool
+  => \lam a => \case P.2 a \with {
+    | yes _ => true
+    | no _ => false
+  }
+
+\func funExt {A : \Type} (B : A -> \Type) {f g : \Pi (a : A) -> B a}
+             (p : \Pi (a : A) -> f a = g a) : f = g
+  => path (\lam i => \lam a => p a @ i)
+
+-- Обычный \case не раскрывал несколько кейсов вперед, но cases справился
+\func bdb {A : \Type} (p : A -> Bool) : FromDecToBool (FromBoolToDec p) = p => funExt (\lam _ => Bool) $
+  \lam x => unfold (FromDecToBool, FromBoolToDec) $ cases (p x) \with  {
+    | false => idp
+    | true => idp
+  }
